@@ -9,122 +9,249 @@ import numpy as np
 import time
 import array
 import math
+import random
+import sys
 
-GameUri = "http://pc-play.games.dmm.co.jp/play/MistTrainGirlsX/"
-UserAccount = '' #akt72... // asJ. // bf4.t
-UserPassword = ''
+gameUri_ = "http://pc-play.games.dmm.co.jp/play/MistTrainGirlsX/"
+userAccount_ = ''
+userPassword_ = ''
 
-Driver = 0
-Canvas = 0
-DebuggerAddress = '127.0.0.1:9222'
+debuggerAddress_ = ''
+driver_ = 0
+canvas_ = 0
 
 #Canvas Crop (board4,scroll86)
-CanvasShiftX = 2
-CanvasShiftY = 6
-CanvasWidth = 1136
-CanvasHeight = 640
+canvasX_ = 2
+canvasY_ = 6
+canvasWidth_ = 1136
+canvasHeight_ = 640
 
-Frame = 0
+frame_ = 0
 
 def chromeConfig():
-    global Driver
-    global DebuggerAddress
+    global driver_
+    global debuggerAddress_
 
     # use current browser
-    originChrome = webdriver.ChromeOptions()
-    originChrome.debugger_address=DebuggerAddress
-    Driver = webdriver.Chrome(options=originChrome)
+    if debuggerAddress_ != "":
+        if len(sys.argv) > 1 and (sys.argv[1] == '127.0.0.1:9223' or 
+                                 sys.argv[1] == '127.0.0.1:9224') :
+            debuggerAddress_ = sys.argv[1]
+            print(f'debuggerAddress_ = {debuggerAddress_} : sys.argv[1]')
+        originChrome = webdriver.ChromeOptions()
+        originChrome.debugger_address=debuggerAddress_
+        driver_ = webdriver.Chrome(options=originChrome)
+    else:
+        driver_ = webdriver.Chrome()
 
 def isGameSite():
-    return Driver.current_url != GameUri
+    return driver_.current_url == gameUri_
 
 def gameLogin():
     '''Login DMM service'''
-    global Driver
-    if isGameSite():
-        Driver.get(GameUri)
-    
-    #login
-    global UserAccount
-    global UserPassword
+    global driver_
+    if not isGameSite():
+        driver_.get(gameUri_)
+        time.sleep(1)
 
-    if isGameSite():
+    #login
+    global userAccount_
+    global userPassword_
+
+    if not isGameSite():
         time.sleep(3)
-        accountTextbox = Driver.find_element_by_id("login_id")
-        passwordTextbox = Driver.find_element_by_id("password")
+        accountTextbox = driver_.find_element_by_id("login_id")
+        passwordTextbox = driver_.find_element_by_id("password")
         accountTextbox.clear()
-        accountTextbox.send_keys(UserAccount)
+        accountTextbox.send_keys(userAccount_)
         passwordTextbox.clear()
-        passwordTextbox.send_keys(UserPassword)
+        passwordTextbox.send_keys(userPassword_)
         passwordTextbox.send_keys(Keys.RETURN)
         time.sleep(4) #waiting for login
 
 def windowConfig():
     '''resize window and locate gameCanvas'''
     #1156,648 +17,87
-    Driver.set_window_size(1173, 735)
+    driver_.set_window_size(1173, 735)
     js="var aaa = document.documentElement.scrollTop=70"  
-    Driver.execute_script(js)  
+    driver_.execute_script(js)  
     #time.sleep(1) #waiting for resize window
     # locate: iframe game_frame frm1
-    Driver.switch_to.frame("game_frame")
-    Driver.switch_to.frame("frm1")
-    global Canvas
-    Canvas = Driver.find_element_by_id("GameCanvas")
+    driver_.switch_to.frame("game_frame")
+    driver_.switch_to.frame("frm1")
+    global canvas_
+    canvas_ = driver_.find_element_by_id("GameCanvas")
     # TODO: if canvas not found
-    global CanvasWidth
-    global CanvasHeight
-    CanvasWidth = math.ceil(Canvas.size["width"])
-    CanvasHeight = math.ceil(Canvas.size["height"])
+    global canvasWidth_
+    global canvasHeight_
+    canvasWidth_ = math.ceil(canvas_.size["width"])
+    canvasHeight_ = math.ceil(canvas_.size["height"])
 
-def getFrame() -> bytes:
-    global Driver
-    global CanvasShiftX,CanvasShiftY,CanvasWidth,CanvasHeight
-    scr_png = Driver.get_screenshot_as_png()
+# vision ----------------------------------------------------
 
+def updateFrame():
+    global driver_
+    global frame_
+    global canvasX_,canvasY_,canvasWidth_,canvasHeight_
+    scr_png = driver_.get_screenshot_as_png()
     # cv method
     nparr = np.frombuffer(scr_png, np.uint8)
     img = cv2.imdecode(nparr, cv2.IMREAD_UNCHANGED)
     # canvas crop
-    img = img[CanvasShiftY:CanvasShiftY+CanvasHeight,
-                CanvasShiftX:CanvasShiftX+CanvasWidth]
+    img = img[canvasY_:canvasY_+canvasHeight_,
+                canvasX_:canvasX_+canvasWidth_]
+    frame_ = cv2.cvtColor(img,cv2.COLOR_BGR2GRAY)
+    return img #return color img
 
-    return img
+# action ----------------------------------------------------
 
 def tap(x ,y):
-    global Driver
-    global Canvas
-    webdriver.ActionChains(Driver).move_to_element_with_offset(Canvas, x, y).click().perform()
-    time.sleep(0.33)
+    global driver_
+    global canvas_
+    webdriver.ActionChains(driver_).move_to_element_with_offset(canvas_, x , y).click().perform()
+    # check lib/selenium/webdriver/common/interactions/pointer_actions  
+    # default_move_duration = 34
+    time.sleep(0.15 * random.random())
 
-#---------------------------------------------------------------
+def scroll(x ,y,offsetX,offsetY):
+    global driver_
+    global canvas_
+    webdriver.ActionChains(driver_).move_to_element_with_offset(canvas_, x , y).click_and_hold().pause(0.1).move_to_element_with_offset(canvas_,x+offsetX,y+offsetY).release().perform()
+    # check lib/selenium/webdriver/common/interactions/pointer_actions  
+    # default_move_duration = 34
+    time.sleep(0.15 * random.random())
+
+def tapIfFind(templateName):
+    global template_
+    template = findTemplate(templateName)
+    res = cv2.matchTemplate(frame_,template,cv2.TM_CCOEFF_NORMED)
+    min_val, max_val, min_loc, max_loc = cv2.minMaxLoc(res)
+    x,y = max_loc
+
+    threshold = 0.9
+    # print(f"{templateName}:{round(res[y,x],2)}")
+    if max_val > threshold:
+        print(f'tap {templateName} : {x},{y} ({max_val})')
+        tap(x,y)
+
+def TryFind(templateName):
+    global template_
+    template = findTemplate(templateName)
+    res = cv2.matchTemplate(frame_,template,cv2.TM_CCOEFF_NORMED)
+    min_val, max_val, min_loc, max_loc = cv2.minMaxLoc(res)
+    x,y = max_loc
+
+    threshold = 0.9
+    # print(f"{templateName}:{round(res[y,x],2)}")
+    if max_val > threshold:
+        print(f'find {templateName} : {x},{y} ({max_val})')
+        return True
+
+# script ----------------------------------------------------
+template_ = {}
+def loadTemplate(templateName):
+    template_.setdefault(templateName,cv2.imread(rf".\image\{templateName}.png",0))
+
+def findTemplate(templateName):
+    if templateName in template_:
+        return template_[templateName]
+    else:
+        loadTemplate(templateName)
+        return template_[templateName]
+
+def templateInit():None
+    # # login
+    # loadTemplate('loginGear')
+    # loadTemplate('InfoPageCantClose')
 
 def main():
-    global Driver,Frame
-
-    #connect browser (init)
+    global driver_,frame_
+    # connect browser (init)
     chromeConfig()
     gameLogin()
     windowConfig()
-    
-    #test frame
-    if 0:
-        testFrameCv = getFrame()
-        cv2.imwrite(r'.\curFrameCvPng.png',testFrameCv)
-        cv2.namedWindow('My Image', cv2.WINDOW_GUI_EXPANDED | cv2.WINDOW_AUTOSIZE)
-        cv2.imshow('My Image', testFrameCv)
-        cv2.waitKey(0)
-        cv2.destroyAllWindows()
+    templateInit()
 
-    Frame = getFrame()
-    #main scrip
+    # main script
 
-
-
-
-
-    #tap(100,500)
-
-#---------------------------------------------------------------
+debuggerAddress_ = '127.0.0.1:9223' #yuk
+# debuggerAddress_ = '127.0.0.1:9224' #hat
 main()
-time.sleep(999999) #loop
+#---------------------------------------------------------------
+
+def eventGacha():
+    if 0:None
+    elif tapIfFind('eventGacha'):None
+    elif TryFind('eventGachaConfirm'):
+        tap(651,487)
+        time.sleep(5)
+        tap(565,598)
+        time.sleep(1)
+        tap(565,486)
+
+# test scrip
+while 1:
+    frame = updateFrame()
+    if 0:None
+
+    # change day windows
+    elif TryFind('changeDay') or TryFind('errorRestart'):
+        chromeConfig()
+        windowConfig()
+
+    # mainQuest2-5
+    elif tapIfFind('questNormalUnselect'):None
+    elif tapIfFind('autorunConfirm'):None
+    elif tapIfFind('autorun'):None
+    elif TryFind('mainQuest2-5N'):
+        tap(1000,532)
+    elif tapIfFind('mainQuestStage2'):None
+    elif TryFind('mainQuestStage'):
+        tap(253,515)
+    elif tapIfFind('mainquest'):None
+    elif tapIfFind('quest'):None
+
+    # recover stamina
+    elif TryFind('recoverStaminaMenu'):
+        print('chain tap start: recoverStamina')
+        time.sleep(0.5)
+        scroll(1021,455,0,-300)
+        time.sleep(2)
+        tap(279,448)
+        time.sleep(2)
+        tap(698,367)
+        time.sleep(2)
+        tap(650,525)
+        time.sleep(2)
+        tap(567,477)
+        time.sleep(2)
+        tap(566,538)
+        time.sleep(2)
+        tap(903,602)
+        time.sleep(2)
+        tap(656,484)
+        print('chain tap end : recoverStamina')
+    elif TryFind('battleOutofStamina2'):
+        tap(647,482)
+    # battle
+    elif tapIfFind('battleContinue'):None
+    elif tapIfFind('battleLoseAndContinue'):None
+
+    
+    # login
+    elif TryFind('loginGear'):
+        tap(533,540)
+    elif tapIfFind('InfoPageCanClose'):None
+    elif tapIfFind('InfoPageSkip'):None
+    elif TryFind('InfoPageCantClose'):  #高誤判
+        tap(701,594)
+
+    # other
+    # elif tapIfFind('StorySkipConfirm'):None
+
+    # eventGacha()
+
+
+    time.sleep(0.5)
+
+

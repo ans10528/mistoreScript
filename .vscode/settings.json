@@ -1,6 +1,7 @@
 {
-    "python.pythonPath": "C:\\Users\\ans10\\anaconda3\\envs\\mistore",
+    "python.pythonPath": "C:\\Users\\ans10\\anaconda3\\envs\\mistore\\python.exe",
     "python.autoComplete.extraPaths": [
         "C:\\Users\\ans10\\anaconda3\\envs\\mistore\\Lib\\site-packages"
-    ]
+    ],
+    "jupyter.jupyterServerType": "local"
 }
