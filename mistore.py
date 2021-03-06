@@ -12,6 +12,8 @@ import math
 import random
 import sys
 
+# base(driver) --------------------------------------------------
+
 gameUri_ = "http://pc-play.games.dmm.co.jp/play/MistTrainGirlsX/"
 userAccount_ = ''
 userPassword_ = ''
@@ -71,6 +73,7 @@ def gameLogin():
 
 def windowConfig():
     '''resize window and locate gameCanvas'''
+    global driver_
     #1156,648 +17,87
     driver_.set_window_size(1173, 735)
     js="var aaa = document.documentElement.scrollTop=70"  
@@ -86,6 +89,47 @@ def windowConfig():
     global canvasHeight_
     canvasWidth_ = math.ceil(canvas_.size["width"])
     canvasHeight_ = math.ceil(canvas_.size["height"])
+
+def gameRestart():
+    global driver_
+    driver_.refresh()
+    time.sleep(5)
+    chromeConfig()
+    windowConfig()
+    time.sleep(5)
+
+def printWithTime(msg):
+    curTime = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
+    print(f'{curTime}| {msg}')
+
+# loop control -------------------------------------------------
+
+frameDelayDefault_ = 1.0
+frameDelayStep_ = 0.2
+frameDelayLimit_ = 30.0
+frameDelay_ = frameDelayDefault_
+
+frameDelayHasBeenChanged_ = True
+
+def setCurrnetFrameDelay(sec:float):
+    global frameDelayHasBeenChanged_
+    global frameDelay_
+    frameDelay_ = sec
+    frameDelayHasBeenChanged_ = True # do not reset frameDelay at this time
+
+def frameEnd():
+    global frameDelayHasBeenChanged_
+    global frameDelay_,frameDelayStep_,frameDelayLimit_,frameDelayDefault_
+    global hasAction_
+    if not frameDelayHasBeenChanged_:
+        if hasAction_: 
+            setCurrnetFrameDelay(frameDelayDefault_)
+        else:
+            setCurrnetFrameDelay(min(frameDelay_ + frameDelayStep_ , frameDelayLimit_))
+
+    if frameDelay_ > 0:
+        time.sleep(frameDelay_)
+        # print(f'{frameDelay_}')
 
 # vision ----------------------------------------------------
 
@@ -103,51 +147,6 @@ def updateFrame():
     frame_ = cv2.cvtColor(img,cv2.COLOR_BGR2GRAY)
     return img #return color img
 
-# action ----------------------------------------------------
-
-def tap(x ,y):
-    global driver_
-    global canvas_
-    webdriver.ActionChains(driver_).move_to_element_with_offset(canvas_, x , y).click().perform()
-    # check lib/selenium/webdriver/common/interactions/pointer_actions  
-    # default_move_duration = 34
-    time.sleep(0.15 * random.random())
-
-def scroll(x ,y,offsetX,offsetY):
-    global driver_
-    global canvas_
-    webdriver.ActionChains(driver_).move_to_element_with_offset(canvas_, x , y).click_and_hold().pause(0.1).move_to_element_with_offset(canvas_,x+offsetX,y+offsetY).release().perform()
-    # check lib/selenium/webdriver/common/interactions/pointer_actions  
-    # default_move_duration = 34
-    time.sleep(0.15 * random.random())
-
-def tapIfFind(templateName):
-    global template_
-    template = findTemplate(templateName)
-    res = cv2.matchTemplate(frame_,template,cv2.TM_CCOEFF_NORMED)
-    min_val, max_val, min_loc, max_loc = cv2.minMaxLoc(res)
-    x,y = max_loc
-
-    threshold = 0.9
-    # print(f"{templateName}:{round(res[y,x],2)}")
-    if max_val > threshold:
-        print(f'tap {templateName} : {x},{y} ({max_val})')
-        tap(x,y)
-
-def TryFind(templateName):
-    global template_
-    template = findTemplate(templateName)
-    res = cv2.matchTemplate(frame_,template,cv2.TM_CCOEFF_NORMED)
-    min_val, max_val, min_loc, max_loc = cv2.minMaxLoc(res)
-    x,y = max_loc
-
-    threshold = 0.9
-    # print(f"{templateName}:{round(res[y,x],2)}")
-    if max_val > threshold:
-        print(f'find {templateName} : {x},{y} ({max_val})')
-        return True
-
-# script ----------------------------------------------------
 template_ = {}
 def loadTemplate(templateName):
     template_.setdefault(templateName,cv2.imread(rf".\image\{templateName}.png",0))
@@ -159,10 +158,72 @@ def findTemplate(templateName):
         loadTemplate(templateName)
         return template_[templateName]
 
-def templateInit():None
+def templateInit():None  # auto load when call findTemplate()
     # # login
     # loadTemplate('loginGear')
     # loadTemplate('InfoPageCantClose')
+
+def match(templateName):
+    global template_
+    template = findTemplate(templateName)
+    res = cv2.matchTemplate(frame_,template,cv2.TM_CCOEFF_NORMED)
+    min_val, max_val, min_loc, max_loc = cv2.minMaxLoc(res)
+    return max_val,max_loc
+
+
+# action ----------------------------------------------------
+
+hasAction_ = False # if has tap in the frame, reset frame delay
+
+def actionDealy():
+    curDelay = 0.1 + 0.1 * random.random()
+    time.sleep(curDelay)
+    # offsetCurrnetFrameDelay(-curDelay)
+
+def tap(x ,y):
+    global driver_,canvas_
+    global hasAction_
+    webdriver.ActionChains(driver_).move_to_element_with_offset(canvas_, x , y).click().perform()
+    # check lib/selenium/webdriver/common/interactions/pointer_actions  
+    # default_move_duration = 34
+    actionDealy()
+    hasAction_ = True
+    printWithTime(f'tap {x},{y}')
+
+def scroll(x ,y,offsetX,offsetY):
+    global driver_,canvas_
+    global hasAction_
+    webdriver.ActionChains(driver_).move_to_element_with_offset(canvas_, x , y).click_and_hold().pause(0.1).move_to_element_with_offset(canvas_,x+offsetX,y+offsetY).release().perform()
+    # check lib/selenium/webdriver/common/interactions/pointer_actions  
+    # default_move_duration = 34
+    actionDealy()
+    hasAction_ = True
+    printWithTime(f'scroll {x},{y} offset {offsetX},{offsetY}')
+
+def tapIfFind(templateName):
+    max_val,max_loc = match(templateName)
+    x,y = max_loc
+
+    threshold = 0.97
+    # print(f"{templateName}:{round(res[y,x],2)}")
+    if max_val > threshold:
+        printWithTime(f'find {templateName} : {x},{y} ({max_val})')
+        tap(x,y)
+        return True
+    return False
+
+def TryFind(templateName):
+    max_val,max_loc = match(templateName)
+    x,y = max_loc
+
+    threshold = 0.97
+    # print(f"{templateName}:{round(res[y,x],2)}")
+    if max_val > threshold:
+        printWithTime(f'find {templateName} : {x},{y} ({max_val})')
+        return True
+    return False
+
+# script ----------------------------------------------------
 
 def main():
     global driver_,frame_
@@ -188,16 +249,28 @@ def eventGacha():
         tap(565,598)
         time.sleep(1)
         tap(565,486)
+    else:
+        return False
+    return True
 
+
+f_hasbeenDisconnect_ = False
 # test scrip
 while 1:
+    # TODO frame start
     frame = updateFrame()
-    if 0:None
+    hasAction_ = False
+    frameDelayHasBeenChanged_ = False
 
-    # change day windows
+    # -------------------------------
+    if 0:None
+    elif eventGacha():None
+
+
+    # change day window
     elif TryFind('changeDay') or TryFind('errorRestart'):
-        chromeConfig()
-        windowConfig()
+        gameRestart()
+        f_hasbeenDisconnect_ = True
 
     # mainQuest2-5
     elif tapIfFind('questNormalUnselect'):None
@@ -208,6 +281,7 @@ while 1:
     elif tapIfFind('mainQuestStage2'):None
     elif TryFind('mainQuestStage'):
         tap(253,515)
+        setCurrnetFrameDelay(0.2)
     elif tapIfFind('mainquest'):None
     elif tapIfFind('quest'):None
 
@@ -230,28 +304,36 @@ while 1:
         tap(903,602)
         time.sleep(2)
         tap(656,484)
+        time.sleep(0.5)
         print('chain tap end : recoverStamina')
     elif TryFind('battleOutofStamina2'):
         tap(647,482)
     # battle
-    elif tapIfFind('battleContinue'):None
+    elif tapIfFind('battleContinue'):
+        f_hasbeenDisconnect_ = True
     elif tapIfFind('battleLoseAndContinue'):None
-
+    elif f_hasbeenDisconnect_ and tapIfFind('battleEndNextBtn'):
+        f_hasbeenDisconnect_ = False
     
+
     # login
     elif TryFind('loginGear'):
         tap(533,540)
     elif tapIfFind('InfoPageCanClose'):None
+    elif tapIfFind('InfoPageCanClose2'):None #for 10day login bound 1
+    elif tapIfFind('InfoPageCanClose3'):None #for 10day login bound 2
     elif tapIfFind('InfoPageSkip'):None
-    elif TryFind('InfoPageCantClose'):  #高誤判
+    elif TryFind('InfoPageCantClose'):
         tap(701,594)
 
     # other
     # elif tapIfFind('StorySkipConfirm'):None
 
-    # eventGacha()
+    
 
+    frameEnd() # ----------------
 
-    time.sleep(0.5)
+       
+
 
 
