@@ -3,6 +3,10 @@ from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.remote.webelement import WebElement
 from selenium.webdriver.common.action_chains import ActionChains
 
+# from selenium.webdriver.support.ui import WebDriverWait
+# from selenium.webdriver.common.by import By
+# from selenium.webdriver.support import expected_conditions as EC
+
 import cv2
 
 import numpy as np
@@ -149,7 +153,7 @@ def updateFrame():
 
 template_ = {}
 def loadTemplate(templateName):
-    template_.setdefault(templateName,cv2.imread(rf".\image\{templateName}.png",0))
+    template_.setdefault(templateName,cv2.imread(rf".\template\{templateName}.png",0))
 
 def findTemplate(templateName):
     if templateName in template_:
@@ -163,6 +167,19 @@ def templateInit():None  # auto load when call findTemplate()
     # loadTemplate('loginGear')
     # loadTemplate('InfoPageCantClose')
 
+# TODO vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv
+templateDisableTimer_ = {}
+def templateTimer(templateName,timeInv):
+    return False
+# return true if template is enable
+def isTemplateEnable(templateName):
+    if templateName in templateDisableTimer_:
+        return templateDisableTimer_[templateName] <= 0
+    else:
+        templateDisableTimer_.setdefault(templateName,0)
+        return True
+# TODO ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
 def match(templateName):
     global template_
     template = findTemplate(templateName)
@@ -170,6 +187,9 @@ def match(templateName):
     min_val, max_val, min_loc, max_loc = cv2.minMaxLoc(res)
     return max_val,max_loc
 
+def debugShowImage(res):
+    cv2.imshow('',res)
+    cv2.waitKey()
 
 # action ----------------------------------------------------
 
@@ -223,6 +243,9 @@ def TryFind(templateName):
         return True
     return False
 
+def doNotFindTimer(templateName,timeMs):
+    return 0
+
 # script ----------------------------------------------------
 
 def main():
@@ -252,10 +275,39 @@ def eventGacha():
     else:
         return False
     return True
-
+def raidboss():
+    if 0:None
+    elif tapIfFind('raid_sanka_autorun'):None
+    elif tapIfFind('raid_sanka_vh2'):None
+    # elif tapIfFind('raid_sanka_vh3'):None
+    elif TryFind('raid_sanka_isFriendPage'):
+        tap(829,540)
+        time.sleep(2)
+    elif TryFind('raid_sanka_searchfaildcount0') and not TryFind('battleOutofStamina2') :
+        tap(902,602)
+        # TODO : disableTemplateTimer('raid_sanka_searchfaildcount0',10000)
+        time.sleep(2)
+    # elif tapIfFind('raid_sanka_vh1'):None
+    elif tapIfFind('raid_sanka_friend'):None
+    elif tapIfFind('raid_sanka'):None
+    elif tapIfFind('raid_sanka_confirm'):None
+    else:
+        return False
+    return True
+def altar():
+    if 0:None
+    elif TryFind('altarNextQuest'):
+        tap(932,553)
+        time.sleep(2)
+        tap(656,485)
+        time.sleep(2)
+    else:
+        return False
+    return True
 
 f_hasbeenDisconnect_ = False
 # test scrip
+print('Stript Loop Start --')
 while 1:
     # TODO frame start
     frame = updateFrame()
@@ -264,14 +316,15 @@ while 1:
 
     # -------------------------------
     if 0:None
-    elif eventGacha():None
-
+    # elif eventGacha():None
+    # elif altar():None
+    elif raidboss():None
 
     # change day window
     elif TryFind('changeDay') or TryFind('errorRestart'):
         gameRestart()
         f_hasbeenDisconnect_ = True
-
+    
     # mainQuest2-5
     elif tapIfFind('questNormalUnselect'):None
     elif tapIfFind('autorunConfirm'):None
@@ -288,7 +341,7 @@ while 1:
     # recover stamina
     elif TryFind('recoverStaminaMenu'):
         print('chain tap start: recoverStamina')
-        time.sleep(0.5)
+        time.sleep(2)
         scroll(1021,455,0,-300)
         time.sleep(2)
         tap(279,448)
@@ -296,7 +349,7 @@ while 1:
         tap(698,367)
         time.sleep(2)
         tap(650,525)
-        time.sleep(2)
+        time.sleep(2.5)
         tap(567,477)
         time.sleep(2)
         tap(566,538)
