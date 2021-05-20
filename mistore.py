@@ -141,14 +141,22 @@ def updateFrame():
     global driver_
     global frame_
     global canvasX_,canvasY_,canvasWidth_,canvasHeight_
-    scr_png = driver_.get_screenshot_as_png()
-    # cv method
-    nparr = np.frombuffer(scr_png, np.uint8)
-    img = cv2.imdecode(nparr, cv2.IMREAD_UNCHANGED)
-    # canvas crop
-    img = img[canvasY_:canvasY_+canvasHeight_,
-                canvasX_:canvasX_+canvasWidth_]
-    frame_ = cv2.cvtColor(img,cv2.COLOR_BGR2GRAY)
+    
+    img = None
+    try:
+        scr_png = driver_.get_screenshot_as_png()
+        # cv method
+        nparr = np.frombuffer(scr_png, np.uint8)
+        img = cv2.imdecode(nparr, cv2.IMREAD_UNCHANGED)
+        # canvas crop
+        img = img[canvasY_:canvasY_+canvasHeight_,
+                    canvasX_:canvasX_+canvasWidth_]
+        frame_ = cv2.cvtColor(img,cv2.COLOR_BGR2GRAY)
+    except:
+        print('webdriver error: updateFrame')
+        main()
+        pass
+
     return img #return color img
 
 template_ = {}
@@ -203,7 +211,14 @@ def actionDealy():
 def tap(x ,y):
     global driver_,canvas_
     global hasAction_
-    webdriver.ActionChains(driver_).move_to_element_with_offset(canvas_, x , y).click().perform()
+    try:
+        webdriver.ActionChains(driver_).move_to_element_with_offset(canvas_, x , y).click().perform()
+    except:
+        print('webdriver error: tap')
+        time.sleep(3)
+        main()
+        pass
+    
     # check lib/selenium/webdriver/common/interactions/pointer_actions  
     # default_move_duration = 34
     actionDealy()
@@ -213,7 +228,14 @@ def tap(x ,y):
 def scroll(x ,y,offsetX,offsetY):
     global driver_,canvas_
     global hasAction_
-    webdriver.ActionChains(driver_).move_to_element_with_offset(canvas_, x , y).click_and_hold().pause(0.1).move_to_element_with_offset(canvas_,x+offsetX,y+offsetY).release().perform()
+    try:
+        webdriver.ActionChains(driver_).move_to_element_with_offset(canvas_, x , y).click_and_hold().pause(0.1).move_to_element_with_offset(canvas_,x+offsetX,y+offsetY).release().perform()
+    except:
+        print('webdriver error: scroll')
+        time.sleep(3)
+        main()
+        pass
+    
     # check lib/selenium/webdriver/common/interactions/pointer_actions  
     # default_move_duration = 34
     actionDealy()
@@ -268,10 +290,11 @@ def eventGacha():
     elif tapIfFind('eventGacha'):None
     elif TryFind('eventGachaConfirm'):
         tap(651,487)
-        time.sleep(5)
-        tap(565,598)
-        time.sleep(1)
-        tap(565,486)
+        # time.sleep(5)
+        # tap(565,598)
+        # time.sleep(1)
+        # tap(565,486)
+    elif tapIfFind('eventGacha_onemore'):None
     else:
         return False
     return True
@@ -316,7 +339,7 @@ while 1:
 
     # -------------------------------
     if 0:None
-    # elif eventGacha():None
+    elif eventGacha():None
     # elif altar():None
     elif raidboss():None
 
@@ -378,6 +401,9 @@ while 1:
     elif tapIfFind('InfoPageSkip'):None
     elif TryFind('InfoPageCantClose'):
         tap(701,594)
+    elif tapIfFind('login_round1'):None
+    elif tapIfFind('login_round2'):None
+
 
     # other
     # elif tapIfFind('StorySkipConfirm'):None
